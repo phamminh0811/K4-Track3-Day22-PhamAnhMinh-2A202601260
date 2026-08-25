@@ -36,13 +36,19 @@ COMPUTE_TIER = os.environ.get("COMPUTE_TIER", "T4").upper()
 if COMPUTE_TIER == "T4":
     LIMIT_IFEVAL = 540
     LIMIT_GSM8K = 500
-    LIMIT_MMLU = 500
+    # mmlu is a 57-subject group task — lm-eval's --limit applies PER SUBTASK,
+    # not to the total. 9/subject * 57 subjects ≈ 513 total (≈ the intended
+    # "sampled 500" scale). Passing 500 here would silently run 500*57=28,500
+    # examples instead. For "MMLU full coverage" (rubric bonus), use a value
+    # larger than any single subject's size (e.g. 14000) so lm-eval just caps
+    # each subtask at its actual size.
+    LIMIT_MMLU = 9
     LIMIT_ALPACA = 100
-    BATCH_SIZE = 1
+    BATCH_SIZE = 8
 else:
     LIMIT_IFEVAL = 540
     LIMIT_GSM8K = 1319
-    LIMIT_MMLU = 5000
+    LIMIT_MMLU = 88  # 88/subject * 57 subjects ≈ 5016 total — see T4 note above
     LIMIT_ALPACA = 250
     BATCH_SIZE = 4
 
@@ -81,7 +87,11 @@ def run_lm_eval(adapter_path, tasks, limit, num_fewshot, label):
     cmd = [
         "lm_eval",
         "--model", "hf",
-        "--model_args", f"pretrained={base},peft={adapter_path},load_in_4bit=True",
+        # No explicit load_in_4bit: the base repo's config.json already embeds
+        # a quantization_config (it's the "-bnb-4bit" checkpoint), and current
+        # transformers raises if you pass both at once ("You can't pass
+        # `load_in_4bit` ... when passing `quantization_config`").
+        "--model_args", f"pretrained={base},peft={adapter_path}",
         "--tasks", tasks,
         "--num_fewshot", str(num_fewshot),
         "--limit", str(limit),
@@ -90,7 +100,9 @@ def run_lm_eval(adapter_path, tasks, limit, num_fewshot, label):
         "--output_path", str(out_dir),
     ]
     print(f"\n{'=' * 60}\nRunning lm-eval [{label}]: {tasks}\n{'=' * 60}")
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=2400)
+    # IFEval at batch_size=8 measured ~77 min/condition on a 3B model locally —
+    # well past the old 40-min timeout, which would have killed it mid-run.
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=5400)
 
     out_files = sorted(out_dir.glob("**/results*.json"))
     if not out_files:
@@ -186,6 +198,7 @@ print(f"Loaded {len(alpaca_prompts)} AlpacaEval-lite prompts")
 def generate_with_adapter(adapter_path, prompts, max_new_tokens=256):
     """NB4 pattern: load base + adapter, generate, free memory."""
     from unsloth import FastLanguageModel
+    from unsloth.chat_templates import get_chat_template
     from peft import PeftModel
 
     base = "unsloth/Qwen2.5-3B-bnb-4bit" if COMPUTE_TIER == "T4" else "unsloth/Qwen2.5-7B-bnb-4bit"
@@ -196,6 +209,7 @@ def generate_with_adapter(adapter_path, prompts, max_new_tokens=256):
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer = get_chat_template(tokenizer, chat_template="qwen2.5")
     model = PeftModel.from_pretrained(model, str(adapter_path))
     FastLanguageModel.for_inference(model)
 

@@ -19,10 +19,21 @@ data/eval_prompts.json
 adapters/sft-mini/
 adapters/dpo/
 adapters/orpo/
+adapters/merged-fp16/
 gguf/
 *.gguf
 runs/
 wandb/
+unsloth_compiled_cache/
+
+# Local (non-Colab) run of the combined notebook from inside colab/ — same
+# regenerated artifacts as above, just rooted one level down because that's
+# where REPO_ROOT resolved to for this run.
+colab/adapters/
+colab/data/
+colab/notebooks/
+colab/submission/
+colab/unsloth_compiled_cache/
 
 # HuggingFace cache (Colab + local — model weights are huge)
 .cache/
