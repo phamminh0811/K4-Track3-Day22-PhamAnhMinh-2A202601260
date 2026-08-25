@@ -265,6 +265,8 @@ Full provocations: [`BONUS-CHALLENGE.md`](BONUS-CHALLENGE.md) (tiếng Việt) �
 - **B — Professional** (+5 bonus): A + adapters pushed to HuggingFace Hub via `huggingface-cli upload`
 - **C — Code-only**: Repo + report, không weights (cho học viên hết storage Colab)
 
+**Option B — HF model:** [minhpa/lab22-dpo-vn](https://huggingface.co/minhpa/lab22-dpo-vn) (SFT+DPO LoRA adapter, base `unsloth/Qwen2.5-3B-bnb-4bit`)
+
 ---
 
 ## Acknowledgments
